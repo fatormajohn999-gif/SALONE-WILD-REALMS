@@ -1,0 +1,8 @@
+{
+  "name": "SALONE: WILD REALMS",
+  "description": "Explore Together. A 3D multiplayer exploration adventure game for Android.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
