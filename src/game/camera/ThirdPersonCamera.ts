@@ -9,7 +9,7 @@ export class ThirdPersonCamera {
   private yaw = 0;
   private pitch = 0.34;
   private distance = 6.2;
-  private readonly minPitch = -0.16;
+  private readonly minPitch = -0.14;
   private readonly maxPitch = 1.05;
   private readonly lookSensitivity = 0.0055;
 
@@ -27,7 +27,7 @@ export class ThirdPersonCamera {
     );
     this.camera.inputs.clear();
     this.camera.minZ = 0.25;
-    this.camera.maxZ = 420;
+    this.camera.maxZ = 440;
     this.camera.fov = 0.78;
     scene.activeCamera = this.camera;
   }
@@ -91,15 +91,31 @@ export class ThirdPersonCamera {
       this.targetLookAt
     );
 
-    const horizDist = this.distance * Math.cos(this.pitch);
-    const camX = this.targetLookAt.x - Math.sin(this.yaw) * horizDist;
-    const camZ = this.targetLookAt.z - Math.cos(this.yaw) * horizDist;
-    let camY = this.targetLookAt.y + this.distance * Math.sin(this.pitch);
+    const dirX = -Math.sin(this.yaw) * Math.cos(this.pitch);
+    const dirY = Math.sin(this.pitch);
+    const dirZ = -Math.cos(this.yaw) * Math.cos(this.pitch);
 
-    // Prevent camera from dipping under terrain slopes
-    const minGroundY = getGroundHeight(camX, camZ) + 0.65;
-    if (camY < minGroundY) {
-      camY = minGroundY;
+    const camX = this.targetLookAt.x + dirX * this.distance;
+    const camZ = this.targetLookAt.z + dirZ * this.distance;
+    let camY = this.targetLookAt.y + dirY * this.distance;
+
+    // Sample terrain clearance at the camera position and intermediate arm points
+    // so low, elevated, or orbiting angles never clip below hills or terrain faces.
+    const armSamples = [0.4, 0.65, 0.85, 1.0];
+    let requiredMinY = getGroundHeight(camX, camZ) + 0.72;
+    for (let i = 0; i < armSamples.length; i++) {
+      const t = armSamples[i];
+      const sx = this.targetLookAt.x + dirX * (this.distance * t);
+      const sz = this.targetLookAt.z + dirZ * (this.distance * t);
+      const clearance = t >= 0.95 ? 0.72 : 0.48;
+      const sampleMinY = getGroundHeight(sx, sz) + clearance;
+      if (sampleMinY > requiredMinY) {
+        requiredMinY = sampleMinY;
+      }
+    }
+
+    if (camY < requiredMinY) {
+      camY = requiredMinY;
     }
 
     this.desiredCamPos.set(camX, camY, camZ);

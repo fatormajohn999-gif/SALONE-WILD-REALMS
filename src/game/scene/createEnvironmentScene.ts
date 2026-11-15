@@ -7,7 +7,7 @@ import type { ColliderCircle, EnvironmentSceneHandle, GraphicsQuality } from '..
 import { createForestFlora } from '../world/createForestFlora';
 import { createGroundAndSky } from '../world/createGroundAndSky';
 import { createWaterAndWaterfall } from '../world/createWaterAndWaterfall';
-import { getTerrainHeight } from '../world/terrainMath';
+import { getExactGroundHeight } from '../world/terrainMath';
 
 export function createEnvironmentScene(
   engine: Engine,
@@ -102,7 +102,7 @@ export function createEnvironmentScene(
     scene,
     sunLight,
     shadowGenerator,
-    getGroundHeight: getTerrainHeight,
+    getGroundHeight: getExactGroundHeight,
     colliders,
     registerShadowCaster,
     update,

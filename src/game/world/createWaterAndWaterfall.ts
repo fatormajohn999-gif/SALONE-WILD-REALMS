@@ -8,10 +8,11 @@ import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { ColliderCircle } from '../types';
 import {
+  getExactGroundHeight,
+  getFootprintMinGroundHeight,
   getRiverCenterX,
   getRiverInfo,
   getStreamWaterY,
-  getTerrainHeight,
   valueNoise2D,
 } from './terrainMath';
 
@@ -25,7 +26,7 @@ function createWaterRippleTexture(scene: Scene): DynamicTexture {
   const tex = new DynamicTexture('waterRippleTex', { width: size, height: size }, scene, true);
   const ctx = tex.getContext();
 
-  ctx.fillStyle = '#257B79';
+  ctx.fillStyle = '#1E7E8B';
   ctx.fillRect(0, 0, size, size);
 
   let seed = 7919;
@@ -34,16 +35,16 @@ function createWaterRippleTexture(scene: Scene): DynamicTexture {
     return (seed - 1) / 2147483646;
   };
 
-  // Soft longitudinal current streaks & sunlit ripples
-  for (let i = 0; i < 420; i++) {
+  // Clear blue-green current streaks & sunlit surface ripples
+  for (let i = 0; i < 480; i++) {
     const x = rand() * size;
     const y = rand() * size;
-    const w = 2 + rand() * 8;
-    const h = 14 + rand() * 34;
-    const bright = rand() > 0.45;
+    const w = 2 + rand() * 7;
+    const h = 14 + rand() * 36;
+    const bright = rand() > 0.42;
     ctx.fillStyle = bright
-      ? 'rgba(182, 240, 232, 0.14)'
-      : 'rgba(18, 68, 72, 0.16)';
+      ? 'rgba(186, 246, 240, 0.22)'
+      : 'rgba(14, 66, 78, 0.22)';
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(1, h / w);
@@ -53,8 +54,8 @@ function createWaterRippleTexture(scene: Scene): DynamicTexture {
     ctx.restore();
   }
 
-  tex.uScale = 2.2;
-  tex.vScale = 28;
+  tex.uScale = 2.4;
+  tex.vScale = 30;
   tex.wrapU = DynamicTexture.WRAP_ADDRESSMODE;
   tex.wrapV = DynamicTexture.WRAP_ADDRESSMODE;
   tex.update();
@@ -66,7 +67,7 @@ function createWaterfallFoamTexture(scene: Scene): DynamicTexture {
   const tex = new DynamicTexture('waterfallFoamTex', { width: size, height: size }, scene, true);
   const ctx = tex.getContext();
 
-  ctx.fillStyle = '#4EA8AA';
+  ctx.fillStyle = '#4FB2B8';
   ctx.fillRect(0, 0, size, size);
 
   let seed = 3571;
@@ -75,13 +76,13 @@ function createWaterfallFoamTexture(scene: Scene): DynamicTexture {
     return (seed - 1) / 2147483646;
   };
 
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 560; i++) {
     const x = rand() * size;
     const y = rand() * size;
     const w = 2 + rand() * 7;
     const h = 18 + rand() * 48;
     ctx.fillStyle =
-      rand() > 0.3 ? 'rgba(235, 252, 250, 0.35)' : 'rgba(130, 212, 214, 0.25)';
+      rand() > 0.28 ? 'rgba(238, 253, 252, 0.42)' : 'rgba(128, 214, 218, 0.28)';
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(1, h / w);
@@ -102,17 +103,24 @@ function createWaterfallFoamTexture(scene: Scene): DynamicTexture {
 export function createWaterAndWaterfall(scene: Scene): WaterHandle {
   const colliders: ColliderCircle[] = [];
 
-  // 1. Stream Water Ribbon along carved riverbed (z = -51 to z = 124)
+  // 1. Continuous Stream Water Ribbon (z = -42 to 124) with perpendicular bank offsets
+  //    plus circular Plunge Pool basin at (poolCenterX, -42)
   const leftBank: Vector3[] = [];
   const rightBank: Vector3[] = [];
 
-  for (let z = -51; z <= 124; z += 2) {
+  for (let z = -40; z <= 124; z += 1.25) {
     const cx = getRiverCenterX(z);
     const info = getRiverInfo(cx, z);
-    const span = info.halfWidth * 1.15;
+    const slope = getRiverCenterX(z + 0.5) - getRiverCenterX(z - 0.5);
+    const invLen = 1 / Math.sqrt(1 + slope * slope);
+    const nx = invLen;
+    const nz = -slope * invLen;
+    // Terrain crosses waterY around 0.92 * halfWidth and reaches +0.65 by 1.08 * halfWidth,
+    // so 1.03 * halfWidth tucks the water sheet edge neatly into the earthen banks.
+    const span = info.halfWidth * 1.03;
     const y = getStreamWaterY(z);
-    leftBank.push(new Vector3(cx - span, y, z));
-    rightBank.push(new Vector3(cx + span, y, z));
+    leftBank.push(new Vector3(cx - nx * span, y, z - nz * span));
+    rightBank.push(new Vector3(cx + nx * span, y, z + nz * span));
   }
 
   const streamMesh = MeshBuilder.CreateRibbon(
@@ -129,32 +137,45 @@ export function createWaterAndWaterfall(scene: Scene): WaterHandle {
   const waterTex = createWaterRippleTexture(scene);
   const waterMat = new StandardMaterial('kambuiWaterMat', scene);
   waterMat.diffuseTexture = waterTex;
-  waterMat.diffuseColor = new Color3(0.45, 0.85, 0.82);
-  waterMat.emissiveColor = new Color3(0.08, 0.24, 0.23);
-  waterMat.specularColor = new Color3(0.85, 0.96, 0.94);
-  waterMat.specularPower = 52;
-  waterMat.alpha = 0.78;
+  waterMat.diffuseColor = new Color3(0.42, 0.88, 0.86);
+  waterMat.emissiveColor = new Color3(0.06, 0.25, 0.27);
+  waterMat.specularColor = new Color3(0.9, 0.98, 0.98);
+  waterMat.specularPower = 60;
+  waterMat.alpha = 0.83;
   waterMat.backFaceCulling = false;
   streamMesh.material = waterMat;
   streamMesh.freezeWorldMatrix();
 
-  // 2. Waterfall Cascade at the South-East Cliff into the Plunge Pool
-  const poolCenterX = getRiverCenterX(-44);
-  const poolWaterY = getStreamWaterY(-44);
-  const cliffTopZ = -58;
-  const cliffTopY = Math.max(poolWaterY + 7.2, getTerrainHeight(poolCenterX + 1.5, cliffTopZ) - 0.6);
+  // Plunge pool water surface tucked cleanly under the carved circular basin (radius 10.2 -> 10.5)
+  const poolCenterX = getRiverCenterX(-42);
+  const poolWaterY = getStreamWaterY(-42);
+  const poolDisc = MeshBuilder.CreateDisc(
+    'kambuiPlungePoolWater',
+    { radius: 10.5, tessellation: 28 },
+    scene
+  );
+  poolDisc.position.set(poolCenterX, poolWaterY, -42);
+  poolDisc.rotation.x = Math.PI / 2;
+  poolDisc.material = waterMat;
+  poolDisc.isPickable = false;
+  poolDisc.freezeWorldMatrix();
+
+  // 2. Waterfall Cascade pouring off the South-East Cliff directly into the Plunge Pool (z = -42)
+  const cliffTopZ = -56.5;
+  const cliffGroundY = getExactGroundHeight(poolCenterX + 0.8, cliffTopZ);
+  const cliffTopY = Math.max(poolWaterY + 6.4, cliffGroundY - 0.45);
 
   const wfLeft: Vector3[] = [];
   const wfRight: Vector3[] = [];
-  const steps = 12;
+  const steps = 14;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    // Smooth parabolic water arc falling from cliffTopZ to -49.5
-    const z = cliffTopZ + t * 8.5;
-    const dropCurve = Math.pow(t, 1.55);
-    const y = cliffTopY * (1 - dropCurve) + (poolWaterY - 0.15) * dropCurve;
-    const width = 2.1 + t * 1.3;
-    const centerX = poolCenterX + 1.2 - t * 0.6;
+    // Parabolic cascade from cliff crest (-56.5) directly into plunge pool (-45.5)
+    const z = cliffTopZ + t * 11.0;
+    const dropCurve = Math.pow(t, 1.6);
+    const y = cliffTopY * (1 - dropCurve) + (poolWaterY - 0.18) * dropCurve;
+    const width = 2.2 + t * 1.45;
+    const centerX = poolCenterX + 0.8 - t * 0.5;
     wfLeft.push(new Vector3(centerX - width, y, z));
     wfRight.push(new Vector3(centerX + width, y, z));
   }
@@ -173,29 +194,29 @@ export function createWaterAndWaterfall(scene: Scene): WaterHandle {
   const waterfallTex = createWaterfallFoamTexture(scene);
   const waterfallMat = new StandardMaterial('waterfallMat', scene);
   waterfallMat.diffuseTexture = waterfallTex;
-  waterfallMat.emissiveColor = new Color3(0.32, 0.55, 0.56);
-  waterfallMat.specularColor = new Color3(0.9, 0.98, 1.0);
+  waterfallMat.emissiveColor = new Color3(0.32, 0.56, 0.58);
+  waterfallMat.specularColor = new Color3(0.92, 0.99, 1.0);
   waterfallMat.alpha = 0.88;
   waterfallMesh.material = waterfallMat;
   waterfallMesh.freezeWorldMatrix();
 
-  // Splash foam ring at waterfall base
+  // Splash foam ring resting on the plunge pool surface
   const foamRing = MeshBuilder.CreateDisc(
     'waterfallFoamPool',
-    { radius: 4.4, tessellation: 18 },
+    { radius: 4.5, tessellation: 20 },
     scene
   );
-  foamRing.position.set(poolCenterX + 0.6, poolWaterY + 0.04, -49.2);
+  foamRing.position.set(poolCenterX + 0.3, poolWaterY + 0.035, -45.2);
   foamRing.rotation.x = Math.PI / 2;
   foamRing.isPickable = false;
   const foamMat = new StandardMaterial('waterfallFoamRingMat', scene);
-  foamMat.diffuseColor = new Color3(0.88, 0.97, 0.96);
-  foamMat.emissiveColor = new Color3(0.35, 0.52, 0.52);
-  foamMat.alpha = 0.52;
+  foamMat.diffuseColor = new Color3(0.88, 0.98, 0.97);
+  foamMat.emissiveColor = new Color3(0.36, 0.54, 0.54);
+  foamMat.alpha = 0.55;
   foamRing.material = foamMat;
   foamRing.freezeWorldMatrix();
 
-  // 3. River Stones, Waterfall Cliff Rocks, and Stepping-Stone Ford (ThinInstanced)
+  // 3. River Bank Stones, Submerged Stream Boulders, Waterfall Cliff Rocks, and Stepping-Stone Ford
   const riverStoneBase = MeshBuilder.CreatePolyhedron(
     'riverStoneTemplate',
     { type: 1, size: 0.6 },
@@ -204,8 +225,8 @@ export function createWaterAndWaterfall(scene: Scene): WaterHandle {
   riverStoneBase.isPickable = false;
   riverStoneBase.receiveShadows = true;
   const riverStoneMat = new StandardMaterial('riverStoneMat', scene);
-  riverStoneMat.diffuseColor = new Color3(0.41, 0.43, 0.4);
-  riverStoneMat.specularColor = new Color3(0.18, 0.2, 0.19);
+  riverStoneMat.diffuseColor = new Color3(0.39, 0.42, 0.4);
+  riverStoneMat.specularColor = new Color3(0.22, 0.24, 0.23);
   riverStoneBase.material = riverStoneMat;
 
   const stoneMatrices: number[] = [];
@@ -223,78 +244,101 @@ export function createWaterAndWaterfall(scene: Scene): WaterHandle {
     }
   };
 
-  // Stones lining both banks along the stream
-  for (let z = -50; z <= 116; z += 3.2) {
+  // Stones lining both banks and partially submerged inside the stream
+  for (let z = -47; z <= 118; z += 3.0) {
     const cx = getRiverCenterX(z);
     const info = getRiverInfo(cx, z);
     const n1 = valueNoise2D(z * 0.41, 11.3);
     const n2 = valueNoise2D(z * 0.37, 27.9);
+    const n3 = valueNoise2D(z * 0.63, 41.7);
 
-    if (n1 > 0.32) {
-      const sx = cx - info.halfWidth * (0.85 + n1 * 0.45);
-      const sy = getTerrainHeight(sx, z);
-      const scale = 0.65 + n1 * 1.1;
+    // Left bank stone (rooted on bank slope)
+    if (n1 > 0.3) {
+      const sx = cx - info.halfWidth * (0.94 + n1 * 0.32);
+      const scale = 0.65 + n1 * 1.05;
+      const minY = getFootprintMinGroundHeight(sx, z, scale * 0.45);
       pushMatrix(
-        new Vector3(sx, sy + scale * 0.18, z),
+        new Vector3(sx, minY + scale * 0.14, z),
         n1 * Math.PI * 2,
-        new Vector3(scale * 1.2, scale * 0.62, scale)
+        new Vector3(scale * 1.22, scale * 0.62, scale)
       );
-      if (scale > 1.25 && Math.abs(z - 40) > 6) {
-        colliders.push({ x: sx, z, radius: scale * 0.55 });
+      if (scale > 1.25 && Math.abs(z - 38) > 6) {
+        colliders.push({ x: sx, z, radius: scale * 0.52 });
       }
     }
 
-    if (n2 > 0.35) {
-      const sx = cx + info.halfWidth * (0.85 + n2 * 0.45);
-      const sy = getTerrainHeight(sx, z);
-      const scale = 0.6 + n2 * 1.05;
+    // Right bank stone (rooted on bank slope)
+    if (n2 > 0.34) {
+      const sx = cx + info.halfWidth * (0.94 + n2 * 0.32);
+      const scale = 0.6 + n2 * 1.0;
+      const sz = z + 1.2;
+      const minY = getFootprintMinGroundHeight(sx, sz, scale * 0.45);
       pushMatrix(
-        new Vector3(sx, sy + scale * 0.18, z + 1.2),
+        new Vector3(sx, minY + scale * 0.14, sz),
         n2 * Math.PI * 2,
-        new Vector3(scale, scale * 0.58, scale * 1.25)
+        new Vector3(scale, scale * 0.58, scale * 1.24)
       );
-      if (scale > 1.25 && Math.abs(z - 40) > 6) {
-        colliders.push({ x: sx, z: z + 1.2, radius: scale * 0.55 });
+      if (scale > 1.25 && Math.abs(z - 38) > 6) {
+        colliders.push({ x: sx, z: sz, radius: scale * 0.52 });
       }
+    }
+
+    // Partially submerged rocks sitting directly on the riverbed and peeking above water
+    if (n3 > 0.55 && Math.abs(z - 38) > 6 && z > -38) {
+      const side = n1 > 0.5 ? 1 : -1;
+      const sx = cx + side * info.halfWidth * (0.38 + (n3 - 0.55) * 0.8);
+      const sz = z + 0.6;
+      const bedY = getExactGroundHeight(sx, sz);
+      const scale = 0.72 + n3 * 0.85;
+      pushMatrix(
+        new Vector3(sx, bedY + scale * 0.28, sz),
+        n3 * Math.PI * 2,
+        new Vector3(scale * 1.18, scale * 0.78, scale)
+      );
     }
   }
 
-  // Flat-topped stepping stones across the shallow ford where the dirt path crosses (z ≈ 40)
-  const fordZ = 40.3;
+  // Flat-topped stepping stones anchored on the riverbed across the shallow ford (z ≈ 38)
+  const fordZ = 38.2;
   const fordCenterX = getRiverCenterX(fordZ);
   for (let i = -2; i <= 2; i++) {
-    const fx = fordCenterX + i * 1.65;
-    const fz = fordZ + Math.sin(i * 1.1) * 0.45;
-    const fy = getStreamWaterY(fz);
+    const fx = fordCenterX + i * 1.62;
+    const fz = fordZ + Math.sin(i * 1.1) * 0.42;
+    const bedY = getExactGroundHeight(fx, fz);
+    const waterY = getStreamWaterY(fz);
+    const stoneTop = waterY + 0.08;
+    const stoneCenterY = (bedY + stoneTop) * 0.5;
+    const halfH = Math.max(0.18, (stoneTop - bedY) * 0.55);
     pushMatrix(
-      new Vector3(fx, fy - 0.06, fz),
+      new Vector3(fx, stoneCenterY, fz),
       i * 0.7,
-      new Vector3(1.25, 0.38, 1.05)
+      new Vector3(1.22, halfH * 1.65, 1.04)
     );
   }
 
   // Large framing boulders flanking the waterfall cliff
   const cliffBoulders = [
-    { x: poolCenterX - 3.4, z: -56, s: new Vector3(3.6, 4.4, 3.2), r: 2.0 },
-    { x: poolCenterX + 6.0, z: -56, s: new Vector3(3.8, 4.8, 3.4), r: 2.2 },
-    { x: poolCenterX - 5.2, z: -51, s: new Vector3(2.8, 2.5, 2.6), r: 1.6 },
-    { x: poolCenterX + 6.8, z: -50, s: new Vector3(3.0, 2.7, 2.5), r: 1.7 },
-    { x: poolCenterX + 1.2, z: -58.5, s: new Vector3(4.5, 2.4, 2.8), r: 2.4 },
+    { x: poolCenterX - 3.6, z: -53.5, s: new Vector3(3.4, 4.2, 3.0), r: 1.9 },
+    { x: poolCenterX + 5.6, z: -53.5, s: new Vector3(3.6, 4.5, 3.2), r: 2.0 },
+    { x: poolCenterX - 5.4, z: -48.5, s: new Vector3(2.8, 2.5, 2.6), r: 1.55 },
+    { x: poolCenterX + 6.5, z: -48.0, s: new Vector3(2.9, 2.6, 2.5), r: 1.65 },
+    { x: poolCenterX + 0.9, z: -56.5, s: new Vector3(4.2, 2.2, 2.5), r: 2.2 },
   ];
   cliffBoulders.forEach((b, idx) => {
-    const by = getTerrainHeight(b.x, b.z);
-    pushMatrix(new Vector3(b.x, by + b.s.y * 0.28, b.z), idx * 0.9, b.s);
+    const minY = getFootprintMinGroundHeight(b.x, b.z, b.r * 0.65);
+    pushMatrix(new Vector3(b.x, minY + b.s.y * 0.22, b.z), idx * 0.9, b.s);
     colliders.push({ x: b.x, z: b.z, radius: b.r });
   });
 
   if (stoneMatrices.length > 0) {
     riverStoneBase.thinInstanceSetBuffer('matrix', new Float32Array(stoneMatrices), 16, true);
+    riverStoneBase.thinInstanceRefreshBoundingInfo(false);
   }
 
   const update = (dt: number): void => {
     // Scroll stream ripples downstream (+Z direction) and waterfall downward
-    waterTex.vOffset -= dt * 0.48;
-    waterfallTex.vOffset += dt * 1.45;
+    waterTex.vOffset -= dt * 0.52;
+    waterfallTex.vOffset += dt * 1.5;
   };
 
   return {

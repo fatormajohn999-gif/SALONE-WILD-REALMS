@@ -27,8 +27,75 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK & accept licenses non-interactively
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ANDROID_SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$ANDROID_SDK_DIR" ]; then
+            ANDROID_SDK_DIR="$HOME/android-sdk"
+            mkdir -p "$ANDROID_SDK_DIR"
+          fi
+
+          SDKMANAGER=""
+          if [ -x "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER="$(find "$ANDROID_SDK_DIR/cmdline-tools" -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "Command-line tools not found; downloading official Android commandlinetools..."
+            mkdir -p "$ANDROID_SDK_DIR/cmdline-tools"
+            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools-extract
+            rm -rf "$ANDROID_SDK_DIR/cmdline-tools/latest"
+            mv /tmp/cmdline-tools-extract/cmdline-tools "$ANDROID_SDK_DIR/cmdline-tools/latest"
+            rm -rf /tmp/cmdline-tools.zip /tmp/cmdline-tools-extract
+            SDKMANAGER="$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          echo "Using sdkmanager: $SDKMANAGER"
+          echo "Using Android SDK root: $ANDROID_SDK_DIR"
+
+          # Accept SDK licenses non-interactively; temporarily disable pipefail so
+          # SIGPIPE on `yes` after sdkmanager closes stdin does not fail the step,
+          # while still catching any non-zero exit code from sdkmanager itself.
+          LICENSE_STATUS=0
+          set +o pipefail
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_DIR" --licenses || LICENSE_STATUS=$?
+          set -o pipefail
+          if [ "$LICENSE_STATUS" -ne 0 ]; then
+            echo "Error: sdkmanager --licenses exited with status $LICENSE_STATUS"
+            exit "$LICENSE_STATUS"
+          fi
+
+          # Install only the minimal SDK packages required for Capacitor 8 / compileSdk 36 / AGP 8.13.0
+          # (avoids emulator system images, Android XR, and microXR packages)
+          PACKAGES=("platform-tools" "platforms;android-36" "build-tools;35.0.0")
+          if [ ! -x "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            PACKAGES=("cmdline-tools;latest" "${PACKAGES[@]}")
+          fi
+
+          INSTALL_STATUS=0
+          set +o pipefail
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_DIR" "${PACKAGES[@]}" || INSTALL_STATUS=$?
+          set -o pipefail
+          if [ "$INSTALL_STATUS" -ne 0 ]; then
+            echo "Error: sdkmanager package installation exited with status $INSTALL_STATUS"
+            exit "$INSTALL_STATUS"
+          fi
+
+          echo "ANDROID_HOME=$ANDROID_SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_DIR" >> "$GITHUB_ENV"
+          echo "$ANDROID_SDK_DIR/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_DIR/platform-tools" >> "$GITHUB_PATH"
+
+          test -d "$ANDROID_SDK_DIR/platform-tools"
+          test -d "$ANDROID_SDK_DIR/platforms/android-36"
+          test -d "$ANDROID_SDK_DIR/build-tools/35.0.0"
+          test -f "$ANDROID_SDK_DIR/licenses/android-sdk-license"
 
       - name: Install dependencies
         run: npm ci
@@ -53,7 +120,12 @@ jobs:
 
       - name: Build Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+          ./gradlew assembleDebug --no-daemon
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

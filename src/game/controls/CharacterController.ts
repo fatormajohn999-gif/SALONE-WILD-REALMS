@@ -2,7 +2,7 @@ import { Scalar } from '@babylonjs/core/Maths/math.scalar';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { ExplorerCharacter } from '../character/ExplorerCharacter';
 import type { CharacterMovementState, ColliderCircle, InputState } from '../types';
-import { PLAYABLE_BOUNDARY } from '../world/terrainMath';
+import { PLAYABLE_BOUNDARY, getTerrainSlope } from '../world/terrainMath';
 
 export class CharacterController {
   private readonly character: ExplorerCharacter;
@@ -45,6 +45,8 @@ export class CharacterController {
     this.velocityY = 0;
     this.velocityZ = 0;
     this.isGrounded = true;
+    this.coyoteTimer = 0.11;
+    this.jumpBufferTimer = 0;
     this.facingYaw = 0;
     this.character.setFacingYaw(0);
     this.currentState = 'idle';
@@ -57,6 +59,7 @@ export class CharacterController {
     getGroundHeight: (x: number, z: number) => number,
     colliders: ColliderCircle[]
   ): CharacterMovementState {
+    const wasGrounded = this.isGrounded;
     const inputMag = Math.min(1, Math.hypot(input.moveX, input.moveY));
     const hasMove = inputMag > 0.08;
 
@@ -102,11 +105,13 @@ export class CharacterController {
       this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
     }
 
+    let jumpedThisFrame = false;
     if (this.jumpBufferTimer > 0 && this.coyoteTimer > 0) {
       this.velocityY = this.jumpImpulse;
       this.isGrounded = false;
       this.coyoteTimer = 0;
       this.jumpBufferTimer = 0;
+      jumpedThisFrame = true;
     }
 
     // Apply gravity
@@ -117,7 +122,29 @@ export class CharacterController {
     let nextZ = pos.z + this.velocityZ * dt;
     let nextY = pos.y + this.velocityY * dt;
 
-    // Resolve horizontal circle collisions against clearing landmarks
+    // Prevent climbing up near-vertical cliff walls while allowing smooth uphill walking
+    const nextSlope = getTerrainSlope(nextX, nextZ);
+    if (nextSlope > 0.96) {
+      const nextGroundProbe = getGroundHeight(nextX, nextZ);
+      if (nextGroundProbe > pos.y + 0.14) {
+        const slopeX = getGroundHeight(nextX, pos.z);
+        const slopeZ = getGroundHeight(pos.x, nextZ);
+        if (slopeX <= pos.y + 0.14 && getTerrainSlope(nextX, pos.z) <= 0.96) {
+          nextZ = pos.z;
+          this.velocityZ = 0;
+        } else if (slopeZ <= pos.y + 0.14 && getTerrainSlope(pos.x, nextZ) <= 0.96) {
+          nextX = pos.x;
+          this.velocityX = 0;
+        } else {
+          nextX = pos.x;
+          nextZ = pos.z;
+          this.velocityX = 0;
+          this.velocityZ = 0;
+        }
+      }
+    }
+
+    // Resolve horizontal circle collisions against trees, boulders, and landmarks
     for (const col of colliders) {
       const dx = nextX - col.x;
       const dz = nextZ - col.z;
@@ -134,12 +161,22 @@ export class CharacterController {
       }
     }
 
-    // Keep explorer within the foundation clearing boundary
+    // Keep explorer within the Emerald Forest playable boundary
     nextX = Scalar.Clamp(nextX, -this.worldRadiusLimit, this.worldRadiusLimit);
     nextZ = Scalar.Clamp(nextZ, -this.worldRadiusLimit, this.worldRadiusLimit);
 
     const groundY = getGroundHeight(nextX, nextZ);
     if (nextY <= groundY) {
+      nextY = groundY;
+      this.velocityY = 0;
+      this.isGrounded = true;
+    } else if (
+      wasGrounded &&
+      !jumpedThisFrame &&
+      this.velocityY <= 0 &&
+      nextY - groundY < 0.36
+    ) {
+      // Snap cleanly to downhill terrain slopes so feet never micro-float
       nextY = groundY;
       this.velocityY = 0;
       this.isGrounded = true;
