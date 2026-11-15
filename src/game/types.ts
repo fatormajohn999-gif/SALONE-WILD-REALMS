@@ -34,6 +34,7 @@ export interface EnvironmentSceneHandle {
   getGroundHeight: (x: number, z: number) => number;
   colliders: ColliderCircle[];
   registerShadowCaster: (mesh: import('@babylonjs/core/Meshes/abstractMesh').AbstractMesh) => void;
+  update: (dt: number, focusX?: number, focusZ?: number) => void;
   applyQuality: (quality: GraphicsQuality) => void;
   dispose: () => void;
 }

@@ -27,7 +27,7 @@ export class ThirdPersonCamera {
     );
     this.camera.inputs.clear();
     this.camera.minZ = 0.25;
-    this.camera.maxZ = 240;
+    this.camera.maxZ = 420;
     this.camera.fov = 0.78;
     scene.activeCamera = this.camera;
   }

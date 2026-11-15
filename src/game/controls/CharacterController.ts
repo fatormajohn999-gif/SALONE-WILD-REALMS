@@ -2,6 +2,7 @@ import { Scalar } from '@babylonjs/core/Maths/math.scalar';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { ExplorerCharacter } from '../character/ExplorerCharacter';
 import type { CharacterMovementState, ColliderCircle, InputState } from '../types';
+import { PLAYABLE_BOUNDARY } from '../world/terrainMath';
 
 export class CharacterController {
   private readonly character: ExplorerCharacter;
@@ -9,7 +10,7 @@ export class CharacterController {
   private readonly runSpeed = 7.6;
   private readonly jumpImpulse = 7.4;
   private readonly gravity = -20.5;
-  private readonly worldRadiusLimit = 80;
+  private readonly worldRadiusLimit = PLAYABLE_BOUNDARY;
   private readonly characterRadius = 0.38;
 
   private velocityX = 0;

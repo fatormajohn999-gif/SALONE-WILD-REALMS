@@ -22,8 +22,8 @@ export function TitleOverlay({ isSceneReady, onEnterWorld }: TitleOverlayProps) 
         </p>
 
         <p className="mt-4 text-xs sm:text-sm text-[#A7C1B0] leading-relaxed">
-          Foundation Clearing · Move with the left joystick, drag the right side
-          to orbit the camera, and use Walk/Run or Jump to test terrain traversal.
+          Emerald Forest · Follow the winding laterite trail past the Great Old
+          Tree, cross Kambui Stream, and climb the rocky ridge.
         </p>
 
         <button
@@ -32,7 +32,7 @@ export function TitleOverlay({ isSceneReady, onEnterWorld }: TitleOverlayProps) 
           onClick={onEnterWorld}
           className="mt-7 w-full min-h-[50px] px-6 rounded-xl bg-[#C8A96A] hover:bg-[#D5B97E] disabled:opacity-60 text-[#0B1A13] font-semibold text-sm tracking-wide transition-colors active:scale-[0.98]"
         >
-          {isSceneReady ? 'Enter Clearing' : 'Preparing 3D Scene...'}
+          {isSceneReady ? 'Enter Emerald Forest' : 'Preparing Forest...'}
         </button>
       </div>
     </div>

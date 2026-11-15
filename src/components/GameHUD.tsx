@@ -51,7 +51,7 @@ export function GameHUD({
             ·
           </span>
           <span className="hidden sm:inline text-xs text-[#A7C1B0] whitespace-nowrap">
-            Foundation Clearing
+            Emerald Forest
           </span>
         </div>
 

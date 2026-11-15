@@ -74,9 +74,12 @@ export class GameController {
         this.envHandle.colliders
       );
 
+      const pos = this.characterController.getPosition();
+      this.envHandle.update(dt, pos.x, pos.z);
+
       this.thirdPersonCamera.update(
         dt,
-        this.characterController.getPosition(),
+        pos,
         movementState === 'run',
         this.envHandle.getGroundHeight
       );
